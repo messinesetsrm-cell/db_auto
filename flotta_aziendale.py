@@ -7,43 +7,44 @@ import os
 FILE_PRINCIPALE = "flotta.xlsx"
 FILE_STORICO = "storico_assegnazioni.xlsx"
 
-# --- LOGICA DI AGGIORNAMENTO (Il Motore) ---
+# --- 1. LOGICA DI AGGIORNAMENTO (Il Motore) ---
 def registra_cambio_operatore(targa_input, nuovo_op_nome):
     try:
         # Carica il database principale
         df_p = pd.read_excel(FILE_PRINCIPALE)
         
-        # NORMALIZZAZIONE: Trasformiamo i nomi colonne in minuscolo per la logica interna
-        # Questo evita gli errori 'KeyError: Targa'
-        df_p.columns = df_p.columns.str.strip().str.lower()
+        # Pulizia nomi colonne: toglie spazi e uniforma i nomi per evitare KeyError
+        df_p.columns = df_p.columns.str.strip()
         
-        targa_cercata = targa_input.strip().lower()
+        # Trasformiamo la colonna Targa in stringhe e cerchiamo in modo case-insensitive
+        targa_cercata = targa_input.strip().upper()
+        colonna_targa = 'Targa' # Nome esatto dal tuo Excel
 
-        # Controlliamo se la targa esiste
-        if targa_cercata in df_p['targa'].astype(str).str.lower().values:
+        if targa_cercata in df_p[colonna_targa].astype(str).str.upper().values:
             # Troviamo la riga specifica
-            idx = df_p.index[df_p['targa'].astype(str).str.lower() == targa_cercata][0]
+            idx = df_p.index[df_p[colonna_targa].astype(str).str.upper() == targa_cercata][0]
             
             # Recupero dati per lo storico
-            vecchio_op = df_p.at[idx, 'operatore']
-            data_inizio_originale = df_p.at[idx, 'data_assegnazione']
+            vecchio_op = df_p.at[idx, 'Operatore']
+            data_inizio_originale = df_p.at[idx, 'Data_Assegnazione']
             data_oggi = datetime.now().strftime("%Y-%m-%d")
 
-            # Calcolo giorni di utilizzo
+            # Calcolo giorni di utilizzo (se la data è valida)
             try:
                 inizio_dt = pd.to_datetime(data_inizio_originale)
                 giorni = (datetime.now() - inizio_dt).days
             except:
                 giorni = "N/D"
 
-            # 1. Creazione e salvataggio dello Storico
+            # 1. Preparazione e salvataggio dello Storico
+            # Nota: 'Tipo' non esiste nel tuo Excel principale, quindi usiamo "N/D"
             nuova_riga_st = {
                 "Targa": [targa_input.upper()],
                 "Operatore": [vecchio_op],
                 "Inizio_Assegnazione": [data_inizio_originale],
                 "Fine_Assegnazione": [data_oggi],
                 "Giorni_Utilizzo": [giorni],
-                "Tipo_Vettura": ["N/D"] # Colonna non presente nel file principale
+                "Tipo_Vettura": ["N/D"] 
             }
             df_nuovo_st = pd.DataFrame(nuova_riga_st)
 
@@ -55,12 +56,11 @@ def registra_cambio_operatore(targa_input, nuovo_op_nome):
             
             df_st_finale.to_excel(FILE_STORICO, index=False)
 
-            # 2. Aggiornamento file principale
-            df_p.at[idx, 'operatore'] = nuovo_op_nome.upper()
-            df_p.at[idx, 'data_assegnazione'] = data_oggi
+            # 2. Aggiornamento file principale con nuovo operatore e nuova data
+            df_p.at[idx, 'Operatore'] = nuovo_op_nome.upper()
+            df_p.at[idx, 'Data_Assegnazione'] = data_today = datetime.now().date()
 
-            # Ripristiniamo i nomi colonne originali per il salvataggio
-            df_p.columns = ['Operatore', 'Targa', 'Data_Assegnazione']
+            # Salvataggio fisico su Excel per rendere la modifica permanente
             df_p.to_excel(FILE_PRINCIPALE, index=False)
             
             return True, f"✅ Aggiornamento riuscito per {targa_input.upper()}"
@@ -70,7 +70,7 @@ def registra_cambio_operatore(targa_input, nuovo_op_nome):
     except Exception as e:
         return False, f"⚠️ Errore tecnico: {str(e)}"
 
-# --- INTERFACCIA GRAFICA (Il Layout) ---
+# --- 2. INTERFACCIA GRAFICA (Il Layout) ---
 st.set_page_config(layout="wide", page_title="Gestionale Flotta")
 
 st.title("🚗 Gestione Flotta Aziendale")
@@ -80,29 +80,30 @@ col_form, col_tabella = st.columns([1, 2])
 
 with col_form:
     st.subheader("📝 Registra Cambio")
-    with st.container(border=True):
+    # Container per raggruppare i campi di input
+    with st.container():
         targa_veicolo = st.text_input("Targa Veicolo", placeholder="Es. GX666SK").upper()
-        nuovo_operatore = st.text_input("Nuovo Operatore", placeholder="Es. MARIO ROSSI").upper()
+        nuovo_operatore = st.text_input("Nuovo Operatore", placeholder="Es. FINE RENT").upper()
         
         if st.button("Applica Modifica", use_container_width=True):
             if targa_veicolo and nuovo_operatore:
                 successo, msg = registra_cambio_operatore(targa_veicolo, nuovo_operatore)
                 if successo:
                     st.success(msg)
-                    st.rerun() # Ricarica per mostrare i dati aggiornati
+                    st.rerun() # Ricarica per mostrare i dati aggiornati nella tabella
                 else:
                     st.error(msg)
             else:
-                st.warning("Completa tutti i campi.")
+                st.warning("⚠️ Completa tutti i campi.")
 
 with col_tabella:
     st.subheader("📊 Anteprima Flotta")
     if os.path.exists(FILE_PRINCIPALE):
+        # Carica e mostra la tabella aggiornata
         df_mostra = pd.read_excel(FILE_PRINCIPALE)
-        # Visualizzazione tabella pulita
         st.dataframe(df_mostra, use_container_width=True, hide_index=True)
     else:
-        st.info("File flotta.xlsx non trovato. Caricalo nella cartella del progetto.")
+        st.info("File flotta.xlsx non trovato. Assicurati che sia nella stessa cartella dello script.")
 
 # Sezione Download in basso
 st.divider()
