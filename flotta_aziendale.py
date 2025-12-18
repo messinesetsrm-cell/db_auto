@@ -63,4 +63,55 @@ def registra_cambio_operatore(targa_input, nuovo_op_nome):
             df_p.columns = ['Operatore', 'Targa', 'Data_Assegnazione']
             df_p.to_excel(FILE_PRINCIPALE, index=False)
             
-            return True
+            return True, f"✅ Aggiornamento riuscito per {targa_input.upper()}"
+        else:
+            return False, f"❌ La targa {targa_input.upper()} non è presente nel database."
+
+    except Exception as e:
+        return False, f"⚠️ Errore tecnico: {str(e)}"
+
+# --- INTERFACCIA GRAFICA (Il Layout) ---
+st.set_page_config(layout="wide", page_title="Gestionale Flotta")
+
+st.title("🚗 Gestione Flotta Aziendale")
+
+# Creazione delle due colonne come nel tuo screenshot
+col_form, col_tabella = st.columns([1, 2])
+
+with col_form:
+    st.subheader("📝 Registra Cambio")
+    with st.container(border=True):
+        targa_veicolo = st.text_input("Targa Veicolo", placeholder="Es. GX666SK").upper()
+        nuovo_operatore = st.text_input("Nuovo Operatore", placeholder="Es. MARIO ROSSI").upper()
+        
+        if st.button("Applica Modifica", use_container_width=True):
+            if targa_veicolo and nuovo_operatore:
+                successo, msg = registra_cambio_operatore(targa_veicolo, nuovo_operatore)
+                if successo:
+                    st.success(msg)
+                    st.rerun() # Ricarica per mostrare i dati aggiornati
+                else:
+                    st.error(msg)
+            else:
+                st.warning("Completa tutti i campi.")
+
+with col_tabella:
+    st.subheader("📊 Anteprima Flotta")
+    if os.path.exists(FILE_PRINCIPALE):
+        df_mostra = pd.read_excel(FILE_PRINCIPALE)
+        # Visualizzazione tabella pulita
+        st.dataframe(df_mostra, use_container_width=True, hide_index=True)
+    else:
+        st.info("File flotta.xlsx non trovato. Caricalo nella cartella del progetto.")
+
+# Sezione Download in basso
+st.divider()
+st.subheader("💾 Salva il lavoro")
+if os.path.exists(FILE_PRINCIPALE):
+    with open(FILE_PRINCIPALE, "rb") as f:
+        st.download_button(
+            label="📥 SCARICA EXCEL AGGIORNATO",
+            data=f,
+            file_name="flotta_aggiornata.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
