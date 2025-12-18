@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+import io
 
 # Configurazione file
 FILE_PRINCIPALE = "flotta.xlsx"
@@ -13,15 +14,12 @@ def registra_riassegnazione(targa_input, nuovo_operatore):
             return False, f"❌ Errore: Il file '{FILE_PRINCIPALE}' non esiste."
         
         df_p = pd.read_excel(FILE_PRINCIPALE)
-        
-        # Normalizzazione colonne per evitare KeyError
         df_p.columns = [c.strip().lower() for c in df_p.columns]
         
         col_targa = 'targa'
         col_operatore = 'operatore'
         col_data = 'data_assegnazione'
 
-        # Pulizia dati targa
         df_p[col_targa] = df_p[col_targa].astype(str).str.strip().str.upper()
         targa_input = targa_input.strip().upper()
 
@@ -61,11 +59,26 @@ def registra_riassegnazione(targa_input, nuovo_operatore):
     except Exception as e:
         return False, f"⚠️ Errore: {e}"
 
+# --- FUNZIONE PER CREARE L'EXCEL MULTI-TAB ---
+def crea_excel_completo():
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Foglio 1: Stato Attuale
+        if os.path.exists(FILE_PRINCIPALE):
+            df_p = pd.read_excel(FILE_PRINCIPALE)
+            df_p.to_excel(writer, sheet_name='Stato Attuale', index=False)
+        
+        # Foglio 2: Storico Passaggi
+        if os.path.exists(FILE_STORICO):
+            df_s = pd.read_excel(FILE_STORICO)
+            df_s.to_excel(writer, sheet_name='Storico Passaggi', index=False)
+            
+    return output.getvalue()
+
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(page_title="Gestione Flotta", layout="wide")
 st.title("🚗 Gestione Riassegnazione Flotta")
 
-# Input dati
 col1, col2 = st.columns(2)
 with col1:
     targa = st.text_input("Inserisci Targa", placeholder="es. GX834SK").strip().upper()
@@ -94,15 +107,16 @@ with col_titolo:
 if os.path.exists(FILE_PRINCIPALE):
     df_attuale = pd.read_excel(FILE_PRINCIPALE)
     
-    # Tasto per scaricare l'Excel aggiornato
+    # Generazione file multi-tab in memoria per il download
+    excel_data = crea_excel_completo()
+    
     with col_download:
-        with open(FILE_PRINCIPALE, "rb") as f:
-            st.download_button(
-                label="📥 Scarica Excel Aggiornato",
-                data=f,
-                file_name="flotta_aggiornata.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        st.download_button(
+            label="📥 Scarica Report Completo (2 Tab)",
+            data=excel_data,
+            file_name=f"report_flotta_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     
     st.dataframe(df_attuale, use_container_width=True)
 
@@ -112,7 +126,6 @@ st.subheader("📜 Storico Movimenti (Log)")
 
 if os.path.exists(FILE_STORICO):
     df_st = pd.read_excel(FILE_STORICO)
-    # Mostriamo gli ultimi movimenti in alto
     st.dataframe(df_st.sort_index(ascending=False), use_container_width=True)
 else:
     st.info("Nessun movimento registrato nello storico.")
