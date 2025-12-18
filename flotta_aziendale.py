@@ -19,16 +19,16 @@ def registra_riassegnazione(targa_input, nuovo_operatore):
     df_p = pd.read_excel(FILE_PRINCIPALE)
     df_p.columns = df_p.columns.str.strip()
 
-    if targa_input in df_p['Targa'].values:
-        idx = df_p.index[df_p['Targa'] == targa_input][0]
-        vecchio_op = df_p.at[idx, 'Operatore']
+    if targa_input in df_p['targa'].values:
+        idx = df_p.index[df_p['targa'] == targa_input][0]
+        vecchio_op = df_p.at[idx, 'operatore']
         data_inizio = df_p.at[idx, 'Data_Assegnazione']
         data_fine = datetime.now().strftime("%Y-%m-%d")
 
         # Storico
         nuova_riga_storico = {
-            "Targa": [targa_input],
-            "Operatore": [vecchio_op],
+            "targa": [targa_input],
+            "operatore": [vecchio_op],
             "Inizio_Assegnazione": [data_inizio],
             "Fine_Assegnazione": [data_fine],
             "Tipo_Vettura": ["N/D"]
