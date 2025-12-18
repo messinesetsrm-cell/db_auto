@@ -13,46 +13,49 @@ FILE_STORICO = "storico_assegnazioni.xlsx"
 # --- FUNZIONE LOGICA ---
 def registra_riassegnazione(targa_input, nuovo_operatore):
     if not os.path.exists(FILE_PRINCIPALE):
-        st.error(f"File {FILE_PRINCIPALE} non trovato nel repository!")
+        st.error(f"File {FILE_PRINCIPALE} non trovato!")
         return
 
     df_p = pd.read_excel(FILE_PRINCIPALE)
-    df_p.columns = df_p.columns.str.strip()
+    
+    # FORZIAMO TUTTE LE COLONNE IN MINUSCOLO per evitare errori
+    df_p.columns = [str(c).strip().lower() for c in df_p.columns]
 
-    if targa_input in df_p['targa'].values:
-        idx = df_p.index[df_p['targa'] == targa_input][0]
-        vecchio_op = df_p.at[idx, 'operatore']
-        data_inizio = df_p.at[idx, 'Data_Assegnazione']
-        data_fine = datetime.now().strftime("%Y-%m-%d")
+    # Ora cerchiamo usando il nome minuscolo 'targa'
+    if 'targa' in df_p.columns:
+        # Puliamo anche i dati nella colonna targa da eventuali spazi
+        df_p['targa'] = df_p['targa'].astype(str).str.strip().str.upper()
+        targa_input = targa_input.strip().upper()
 
-        # Storico
-        nuova_riga_storico = {
-            "targa": [targa_input],
-            "operatore": [vecchio_op],
-            "Inizio_Assegnazione": [data_inizio],
-            "Fine_Assegnazione": [data_fine],
-            "Tipo_Vettura": ["N/D"]
-        }
-        df_new_st = pd.DataFrame(nuova_riga_storico)
+        if targa_input in df_p['targa'].values:
+            idx = df_p.index[df_p['targa'] == targa_input][0]
 
-        try:
-            df_st_esistente = pd.read_excel(FILE_STORICO)
-            df_finale_st = pd.concat([df_st_esistente, df_new_st], ignore_index=True)
-        except:
-            df_finale_st = df_new_st
+            # Recuperiamo i dati (usando i nomi minuscoli delle colonne)
+            vecchio_op = df_p.at[idx, 'operatore'] if 'operatore' in df_p.columns else "N/D"
+            
+            # Se la colonna data_assegnazione non esiste, la creiamo
+            col_data = 'data_assegnazione'
+            data_fine = datetime.now().strftime("%Y-%m-%d")
 
-        df_finale_st.to_excel(FILE_STORICO, index=False)
+            # Aggiornamento
+            if 'operatore' in df_p.columns:
+                df_p.at[idx, 'operatore'] = nuovo_operatore
+            
+            if col_data in df_p.columns:
+                df_p.at[idx, col_data] = data_fine
+            else:
+                df_p[col_data] = "" # Crea colonna se manca
+                df_p.at[idx, col_data] = data_fine
 
-        # Aggiornamento principale
-        df_p.at[idx, 'Operatore'] = nuovo_operatore
-        df_p.at[idx, 'Data_Assegnazione'] = data_fine
-        df_p.to_excel(FILE_PRINCIPALE, index=False)
-        
-        st.success(f"✅ Riassegnazione completata per {targa_input}")
-        st.balloons()
+            # Salvataggio
+            df_p.to_excel(FILE_PRINCIPALE, index=False)
+            st.success(f"✅ Riassegnazione completata per {targa_input}!")
+            st.balloons()
+            st.rerun() # Ricarica l'app per mostrare la tabella aggiornata
+        else:
+            st.error(f"❌ Errore: Targa {targa_input} non trovata nei dati.")
     else:
-        st.error(f"❌ Errore: Targa {targa_input} non trovata.")
-
+        st.error("❌ Errore critico: Colonna 'targa' non trovata nel file Excel.")
 # --- INTERFACCIA STREAMLIT ---
 col1, col2 = st.columns(2)
 
