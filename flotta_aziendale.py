@@ -1,86 +1,67 @@
-import streamlit as st
 import pandas as pd
 from datetime import datetime
-import io
 
-st.set_page_config(page_title="Gestione Flotta", layout="wide", page_icon="🚗")
-st.title("🚗 Gestione Flotta Aziendale")
+FILE_PRINCIPALE = "flotta.xlsx"
+FILE_STORICO = "storico_assegnazioni.xlsx"
 
-# --- CARICAMENTO E PULIZIA DATI ---
-@st.cache_data
-def load_local_data():
+def aggiorna_database_e_storico(targa_target, nuovo_op):
+    # 1. Caricamento file con gestione errore
     try:
-        df_f = pd.read_excel("flotta.xlsx")
-        df_s = pd.read_excel("storico_assegnazioni.xlsx")
+        df_p = pd.read_excel(FILE_PRINCIPALE)
+    except FileNotFoundError:
+        print("Errore: File flotta.xlsx non trovato!")
+        return
+
+    # Pulizia nomi colonne
+    df_p.columns = df_p.columns.str.strip()
+
+    if targa_target in df_p['Targa'].values:
+        # Identifichiamo la riga
+        idx = df_p.index[df_p['Targa'] == targa_target][0]
         
-        # Pulizia: nomi colonne in minuscolo e senza spazi
-        df_f.columns = [str(c).strip().lower() for c in df_f.columns]
-        df_s.columns = [str(c).strip().lower() for c in df_s.columns]
+        # 2. Recupero dati per lo Storico
+        vecchio_op = df_p.at[idx, 'Operatore']
+        data_inizio_str = str(df_p.at[idx, 'Data_Assegnazione'])
         
-        # PULIZIA FONDAMENTALE: Toglie spazi bianchi da TUTTE le celle di testo
-        df_f = df_f.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+        # Gestione date per il calcolo dei giorni
+        try:
+            data_inizio = pd.to_datetime(data_inizio_str)
+            oggi = datetime.now()
+            giorni_possesso = (oggi - data_inizio).days
+        except:
+            giorni_possesso = "N/D"
+            data_inizio = data_inizio_str
+
+        # 3. Aggiornamento dello Storico
+        nuova_riga_st = {
+            "Targa": [targa_target],
+            "Operatore": [vecchio_op],
+            "Inizio_Assegnazione": [data_inizio],
+            "Fine_Assegnazione": [datetime.now().strftime("%Y-%m-%d")],
+            "Giorni_Utilizzo": [giorni_possesso],
+            "Tipo_Vettura": ["N/D"] # Colonna non presente nel file principale
+        }
+        df_new_st = pd.DataFrame(nuova_riga_st)
+
+        try:
+            df_st_esistente = pd.read_excel(FILE_STORICO)
+            df_finale_st = pd.concat([df_st_esistente, df_new_st], ignore_index=True)
+        except:
+            df_finale_st = df_new_st
+
+        # SALVATAGGIO FISICO STORICO
+        df_finale_st.to_excel(FILE_STORICO, index=False)
+
+        # 4. Aggiornamento del Database Principale
+        df_p.at[idx, 'Operatore'] = nuovo_op.upper()
+        df_p.at[idx, 'Data_Assegnazione'] = datetime.now().strftime("%Y-%m-%d")
+
+        # SALVATAGGIO FISICO PRINCIPALE (Questo rende la modifica permanente)
+        df_p.to_excel(FILE_PRINCIPALE, index=False)
         
-        return df_f, df_s
-    except Exception as e:
-        st.error(f"Errore caricamento file: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        return f"✅ {targa_target} riassegnata. Vecchio operatore: {vecchio_op} ({giorni_possesso} giorni)"
+    else:
+        return "❌ Targa non trovata."
 
-if 'df_flotta' not in st.session_state:
-    st.session_state.df_flotta, st.session_state.df_storico = load_local_data()
-
-# --- INTERFACCIA ---
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    st.subheader("📝 Registra Cambio")
-    with st.form("form_cambio"):
-        # Puliamo l'input dell'utente eliminando spazi prima e dopo
-        targa_input = st.text_input("Targa Veicolo").strip().upper()
-        nuovo_op = st.text_input("Nuovo Operatore").strip().upper()
-        submit = st.form_submit_button("Applica Modifica")
-
-        if submit:
-            df_p = st.session_state.df_flotta
-            
-            # Confronto reso ultra-sicuro convertendo tutto in stringa e togliendo spazi
-            if targa_input in df_p['targa'].astype(str).values:
-                idx = df_p.index[df_p['targa'].astype(str) == targa_input][0]
-                
-                vecchio_op = df_p.at[idx, 'operatore']
-                data_cambio = datetime.now().strftime("%d/%m/%Y")
-
-                st.session_state.df_flotta.at[idx, 'operatore'] = nuovo_op
-                st.session_state.df_flotta.at[idx, 'data_assegnazione'] = data_cambio
-
-                nuovo_log = pd.DataFrame([{
-                    "targa": targa_input,
-                    "vecchio_operatore": vecchio_op,
-                    "nuovo_operatore": nuovo_op,
-                    "data_cambio": data_cambio
-                }])
-                st.session_state.df_storico = pd.concat([st.session_state.df_storico, nuovo_log], ignore_index=True)
-                
-                st.success(f"✅ Modifica applicata per {targa_input}!")
-                st.balloons()
-            else:
-                st.error(f"❌ La targa '{targa_input}' non è stata trovata. Verifica che sia scritta correttamente nel file Excel.")
-
-with col2:
-    st.subheader("📊 Anteprima Flotta")
-    st.dataframe(st.session_state.df_flotta, use_container_width=True, hide_index=True)
-
-st.divider()
-
-# --- DOWNLOAD ---
-st.subheader("💾 Salva il lavoro")
-buffer = io.BytesIO()
-with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-    st.session_state.df_flotta.to_excel(writer, index=False, sheet_name='Flotta')
-    st.session_state.df_storico.to_excel(writer, index=False, sheet_name='Storico')
-
-st.download_button(
-    label="📥 SCARICA EXCEL AGGIORNATO",
-    data=buffer.getvalue(),
-    file_name=f"flotta_aggiornata_{datetime.now().strftime('%H%M')}.xlsx",
-    mime="application/vnd.ms-excel"
-)
+# Esempio di chiamata (collegalo al tuo pulsante "Applica Modifica")
+# risultato = aggiorna_database_e_storico(targa_inserita, nome_inserito)
