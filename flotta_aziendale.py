@@ -13,7 +13,7 @@ st.markdown("Aggiorna le assegnazioni in tempo reale sul database cloud.")
 # --- CONNESSIONE A GOOGLE SHEETS ---
 # Assicurati che nelle Secrets l'URL sia pulito (senza gid finali)
 conn = st.connection("gsheets", type=GSheetsConnection)
-
+st.write("Verifica URL:", st.secrets["connections"]["gsheets"]["spreadsheet"])
 # --- FUNZIONE PER LEGGERE I DATI ---
 def get_data(sheet_name):
     # Legge il foglio e normalizza i nomi delle colonne in minuscolo
