@@ -76,7 +76,7 @@ def crea_excel_completo():
     return output.getvalue()
 
 # --- INTERFACCIA STREAMLIT ---
-st.image("domys_logo.jpg", width=150)
+st.image("domys_logo.png", width=150)
 st.set_page_config(page_title="Gestione Flotta", layout="wide")
 st.title("🚗 Gestione Riassegnazione Flotta")
 
