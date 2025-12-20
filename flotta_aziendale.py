@@ -78,7 +78,7 @@ def crea_excel_completo():
 # --- INTERFACCIA STREAMLIT ---
 st.image("domys_logo.png", width=150)
 st.set_page_config(page_title="Gestione Flotta", layout="wide")
-st.title("🚗 Gestione Riassegnazione Flotta")
+st.title("🚗 Gestione Flotta Aziendale")
 
 col1, col2 = st.columns(2)
 with col1:
